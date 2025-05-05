@@ -61,6 +61,18 @@ const signatures = {
         // Obfuscated patterns
         { type: "html", pattern: /window\.analytics\s*=\s*window\.analytics\s*\|\|\s*\[\]/i, weight: 0.8 }
       ]
+    },
+    {
+      name: "Zipkin",
+      weight: 0.9,
+      patterns: [
+        { type: "script", pattern: /zipkin/i },
+        { type: "header", pattern: "x-b3-traceid" },
+        { type: "header", pattern: "x-b3-spanid" },
+        { type: "header", pattern: "x-b3-sampled" },
+        { type: "networkRequest", pattern: /api\/v2\/spans/i },
+        { type: "html", pattern: /zipkin/i }
+      ]
     }
   ],
 
@@ -79,6 +91,17 @@ const signatures = {
         { type: "html", pattern: /_reactListening/i },
         { type: "html", pattern: /__REACT_DEVTOOLS_GLOBAL_HOOK__/i },
         { type: "html", pattern: /\[\s*"r"\s*,\s*"e"\s*,\s*"a"\s*,\s*"c"\s*,\s*"t"\s*\]/i, weight: 0.7 }
+      ]
+    },
+    {
+      name: "Emotion",
+      weight: 0.9,
+      patterns: [
+        { type: "script", pattern: /emotion/i },
+        { type: "html", pattern: /css-[a-zA-Z0-9]+/i },
+        { type: "html", pattern: /data-emotion/i },
+        { type: "jsGlobal", pattern: "emotion" },
+        { type: "jsGlobal", pattern: "styled" }
       ]
     },
     {
@@ -179,6 +202,17 @@ const signatures = {
         { type: "networkRequest", pattern: /\.paypal\.com/i },
         { type: "html", pattern: /data-paypal/i }
       ]
+    },
+    {
+      name: "BitPay",
+      weight: 0.9,
+      patterns: [
+        { type: "script", pattern: /bitpay\.com\/bitpay\.js/i },
+        { type: "script", pattern: /bitpay\.com\/bitpay\.min\.js/i },
+        { type: "html", pattern: /data-bitpay/i },
+        { type: "networkRequest", pattern: /bitpay\.com\/api/i },
+        { type: "jsGlobal", pattern: "bitpay" }
+      ]
     }
   ],
 
@@ -197,6 +231,38 @@ const signatures = {
       patterns: [
         { type: "header", pattern: "content-security-policy" },
         { type: "meta", pattern: { name: "content-security-policy" } }
+      ]
+    }
+  ],
+  
+  // Miscellaneous
+  miscellaneous: [
+    {
+      name: "Open Graph",
+      weight: 0.9,
+      patterns: [
+        { type: "meta", pattern: { name: "og:title" } },
+        { type: "meta", pattern: { name: "og:type" } },
+        { type: "meta", pattern: { name: "og:image" } },
+        { type: "meta", pattern: { name: "og:url" } },
+        { type: "html", pattern: /property=["']og:/i }
+      ]
+    }
+  ],
+  
+  // Cookie Compliance
+  cookie_compliance: [
+    {
+      name: "OneTrust",
+      weight: 0.9,
+      patterns: [
+        { type: "script", pattern: /cdn\.cookielaw\.org/i },
+        { type: "script", pattern: /optanon/i },
+        { type: "cookie", pattern: /OptanonConsent/i },
+        { type: "cookie", pattern: /OptanonAlertBoxClosed/i },
+        { type: "jsGlobal", pattern: "OneTrust" },
+        { type: "jsGlobal", pattern: "Optanon" },
+        { type: "html", pattern: /onetrust/i }
       ]
     }
   ],
@@ -427,12 +493,36 @@ const signatures = {
   ]
 };
 
-function detectTechnologies(html) {
+/**
+ * Detect technologies used on a website
+ * @param {string} html - The HTML content of the website
+ * @param {object} httpHeaders - The HTTP headers from the response
+ * @returns {object} - Object containing detected technologies by category
+ */
+function detectTechnologies(html, httpHeaders = {}) {
   const detected = {};
-  const headers = {}; 
   
-  const metaTags = {};
+  // Combine HTTP headers with meta http-equiv headers
+  const metaHeaders = extractHeaders(html);
+  const headers = { ...metaHeaders, ...httpHeaders };
+  
+  // Extract meta tags
+  const metaTags = extractMetaTags(html);
+  
+  // Extract cookies (can't be done server-side, but we'll check for patterns)
   const cookies = {};
+  
+  // Extract script sources
+  const scripts = extractScripts(html);
+  
+  // Extract CSS sources
+  const cssLinks = extractCssLinks(html);
+  
+  // Extract potential JS globals from inline scripts
+  const potentialJsGlobals = extractPotentialJsGlobals(html);
+  
+  // Extract network requests from script tags (limited capability)
+  const potentialNetworkRequests = extractPotentialNetworkRequests(html);
 
   // Iterate over each category in the signatures
   for (const category in signatures) {
@@ -442,42 +532,223 @@ function detectTechnologies(html) {
     // Iterate over each signature in the category
     for (const signature of categorySignatures) {
       let detectedVersion = null;
-      let maxWeight = signature.weight;
+      let maxConfidence = 0;
+      let isDetected = false;
 
+      // Handle technologies with versions
       if (signature.versions) {
         for (const version in signature.versions) {
           const versionData = signature.versions[version];
           const versionPatterns = versionData.patterns;
-          let currentVersionWeight = versionData.weight;
+          let versionConfidence = versionData.weight || 0.5;
+          let versionMatches = 0;
+          let totalPatterns = versionPatterns.length;
 
           for (const pattern of versionPatterns) {
-            let match = false;
-            if(pattern.type==="html" && pattern.pattern.test(html)) match = true;
-
-            if(match)currentVersionWeight *= pattern.weight || 1;
+            let match = checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, potentialJsGlobals, potentialNetworkRequests);
+            
+            if (match) {
+              versionMatches++;
+              versionConfidence *= pattern.weight || 1;
+            }
           }
-          if(currentVersionWeight > maxWeight){
-            maxWeight = currentVersionWeight;
+          
+          // If we have matches and confidence is higher than current max
+          if (versionMatches > 0 && versionConfidence > maxConfidence) {
+            maxConfidence = versionConfidence;
             detectedVersion = version;
+            isDetected = true;
           }
         }
-      } else {
+        
+        // If we detected a version, add it to the results
+        if (isDetected) {
+          detected[category].push({ 
+            name: signature.name, 
+            version: detectedVersion, 
+            confidence: Math.round(maxConfidence * 100) 
+          });
+        }
+      } 
+      // Handle technologies without versions
+      else {
+        let confidence = signature.weight || 0.5;
+        let matches = 0;
+        let totalPatterns = signature.patterns.length;
+        
         for (const pattern of signature.patterns) {
-          let match = false;
-          if(pattern.type === "html" && pattern.pattern.test(html)) {
-             match = true;
-          }
+          let match = checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, potentialJsGlobals, potentialNetworkRequests);
+          
           if (match) {
-            const confidence = maxWeight * (pattern.weight || 1);
-            detected[category].push({ name: signature.name, version: detectedVersion, confidence });
-            break;
+            matches++;
+            confidence *= pattern.weight || 1;
+            // If we have a high confidence match, no need to check more patterns
+            if (confidence > 0.8) break;
           }
-
+        }
+        
+        // If we have matches, add to results
+        if (matches > 0) {
+          detected[category].push({ 
+            name: signature.name, 
+            version: null, 
+            confidence: Math.round(confidence * 100) 
+          });
         }
       }
     }
   }
+  
   return detected;
+}
+
+// Helper function to check a pattern against various content types
+function checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, jsGlobals, networkRequests) {
+  switch (pattern.type) {
+    case "html":
+      return pattern.pattern.test(html);
+      
+    case "script":
+      return scripts.some(script => pattern.pattern.test(script));
+      
+    case "css":
+      return cssLinks.some(css => pattern.pattern.test(css));
+      
+    case "header":
+      if (pattern.value) {
+        return headers[pattern.pattern] && pattern.value.test(headers[pattern.pattern]);
+      }
+      return pattern.pattern in headers;
+      
+    case "meta":
+      if (pattern.content) {
+        return metaTags[pattern.name] && pattern.content.test(metaTags[pattern.name]);
+      }
+      return pattern.name in metaTags;
+      
+    case "cookie":
+      // Simple check for cookie patterns in HTML (not reliable but better than nothing)
+      return pattern.pattern.test(html);
+      
+    case "jsGlobal":
+      // Check if the global variable name appears in the HTML
+      return jsGlobals.includes(pattern.pattern) || 
+             new RegExp(`\\b${pattern.pattern}\\b`).test(html);
+      
+    case "networkRequest":
+      // Check for network request patterns in HTML
+      return pattern.pattern.test(html) || 
+             networkRequests.some(req => pattern.pattern.test(req));
+      
+    default:
+      return false;
+  }
+}
+
+// Extract script sources from HTML
+function extractScripts(html) {
+  const scripts = [];
+  const scriptRegex = /<script[^>]*src=["']([^"']+)["'][^>]*>/gi;
+  let match;
+  
+  while (match = scriptRegex.exec(html)) {
+    scripts.push(match[1]);
+  }
+  
+  return scripts;
+}
+
+// Extract CSS link sources from HTML
+function extractCssLinks(html) {
+  const cssLinks = [];
+  const cssRegex = /<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
+  const altCssRegex = /<link[^>]*href=["']([^"']+\.css[^"']*)["'][^>]*>/gi;
+  let match;
+  
+  while (match = cssRegex.exec(html)) {
+    cssLinks.push(match[1]);
+  }
+  
+  while (match = altCssRegex.exec(html)) {
+    cssLinks.push(match[1]);
+  }
+  
+  return cssLinks;
+}
+
+// Extract meta tags from HTML
+function extractMetaTags(html) {
+  const metaTags = {};
+  const metaRegex = /<meta[^>]*name=["']([^"']+)["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
+  const altMetaRegex = /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']([^"']+)["'][^>]*>/gi;
+  let match;
+  
+  while (match = metaRegex.exec(html)) {
+    metaTags[match[1].toLowerCase()] = match[2];
+  }
+  
+  while (match = altMetaRegex.exec(html)) {
+    metaTags[match[2].toLowerCase()] = match[1];
+  }
+  
+  return metaTags;
+}
+
+// Extract headers from meta http-equiv tags
+function extractHeaders(html) {
+  const headers = {};
+  const headerRegex = /<meta[^>]*http-equiv=["']([^"']+)["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
+  const altHeaderRegex = /<meta[^>]*content=["']([^"']+)["'][^>]*http-equiv=["']([^"']+)["'][^>]*>/gi;
+  let match;
+  
+  while (match = headerRegex.exec(html)) {
+    headers[match[1].toLowerCase()] = match[2];
+  }
+  
+  while (match = altHeaderRegex.exec(html)) {
+    headers[match[2].toLowerCase()] = match[1];
+  }
+  
+  return headers;
+}
+
+// Extract potential JS globals from inline scripts
+function extractPotentialJsGlobals(html) {
+  const globals = [];
+  const globalRegex = /(?:var|let|const|window\.)\s+(\w+)\s*=/gi;
+  const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  let scriptMatch;
+  
+  while (scriptMatch = inlineScriptRegex.exec(html)) {
+    const scriptContent = scriptMatch[1];
+    while (match = globalRegex.exec(scriptContent)) {
+      globals.push(match[1]);
+    }
+  }
+  
+  // Add common globals that might be referenced
+  const commonGlobals = ["React", "ReactDOM", "Vue", "jQuery", "$", "_", "angular", "Stripe", "paypal", "ga", "gtag", "dataLayer"];
+  commonGlobals.forEach(global => {
+    if (html.includes(global)) {
+      globals.push(global);
+    }
+  });
+  
+  return globals;
+}
+
+// Extract potential network requests from script tags
+function extractPotentialNetworkRequests(html) {
+  const requests = [];
+  const urlRegex = /['"]https?:\/\/([^'"]+)['"]/gi;
+  let match;
+  
+  while (match = urlRegex.exec(html)) {
+    requests.push(match[1]);
+  }
+  
+  return requests;
 }
 
 module.exports = { signatures, detectTechnologies };
