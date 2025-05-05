@@ -427,4 +427,57 @@ const signatures = {
   ]
 };
 
-module.exports = signatures;
+function detectTechnologies(html) {
+  const detected = {};
+  const headers = {}; 
+  
+  const metaTags = {};
+  const cookies = {};
+
+  // Iterate over each category in the signatures
+  for (const category in signatures) {
+    detected[category] = []; // Initialize the category array
+    const categorySignatures = signatures[category];
+    
+    // Iterate over each signature in the category
+    for (const signature of categorySignatures) {
+      let detectedVersion = null;
+      let maxWeight = signature.weight;
+
+      if (signature.versions) {
+        for (const version in signature.versions) {
+          const versionData = signature.versions[version];
+          const versionPatterns = versionData.patterns;
+          let currentVersionWeight = versionData.weight;
+
+          for (const pattern of versionPatterns) {
+            let match = false;
+            if(pattern.type==="html" && pattern.pattern.test(html)) match = true;
+
+            if(match)currentVersionWeight *= pattern.weight || 1;
+          }
+          if(currentVersionWeight > maxWeight){
+            maxWeight = currentVersionWeight;
+            detectedVersion = version;
+          }
+        }
+      } else {
+        for (const pattern of signature.patterns) {
+          let match = false;
+          if(pattern.type === "html" && pattern.pattern.test(html)) {
+             match = true;
+          }
+          if (match) {
+            const confidence = maxWeight * (pattern.weight || 1);
+            detected[category].push({ name: signature.name, version: detectedVersion, confidence });
+            break;
+          }
+
+        }
+      }
+    }
+  }
+  return detected;
+}
+
+module.exports = { signatures, detectTechnologies };
