@@ -241,7 +241,7 @@ function App() {
                             
                             <div className="tech-meta">
                               <span className="tech-confidence">
-                                {Math.round(tech.confidence * 100)}%
+                                {tech.confidence > 1 ? Math.round(tech.confidence) : Math.round(tech.confidence * 100)}%
                               </span>
                               
                               {tech.detectedBy === 'ml' && (
