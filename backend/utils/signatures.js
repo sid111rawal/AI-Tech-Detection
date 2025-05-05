@@ -13,13 +13,12 @@ const signatures = {
       versions: {
         "Universal Analytics": {
           weight: 0.9,
-          patterns: [
-            { type: "script", pattern: /www\.google-analytics\.com\/analytics\.js/i },
-            { type: "script", pattern: /www\.googletagmanager\.com\/gtag\/js/i },
-            { type: "cookie", pattern: /^_ga/ },
-            { type: "cookie", pattern: /^_gid/ },
-            { type: "cookie", pattern: /^_gat/ },
-            { type: "jsGlobal", pattern: "ga" },
+          patterns: [ // Universal Analytics patterns
+            { type: "script", pattern: /www\.google-analytics\.com\/analytics\.js/i, weight: 0.9 }, // Main UA script
+            { type: "script", pattern: /www\.googletagmanager\.com\/gtag\/js/i, weight: 0.8 }, // Gtag script (can be used by both UA and GA4)
+            { type: "cookie", pattern: /^_gid/, weight: 0.7 }, // Secondary GA cookie
+            { type: "cookie", pattern: /^_gat/, weight: 0.6 }, // Throttle cookie
+            { type: "jsGlobal", pattern: "ga", weight: 0.8 }, // Global function
             { type: "jsGlobal", pattern: "gtag" },
             { type: "jsGlobal", pattern: "dataLayer" },
             // Obfuscated patterns
@@ -28,9 +27,9 @@ const signatures = {
           ]
         },
         "GA4": {
-          weight: 0.9,
-          patterns: [
-            { type: "script", pattern: /www\.googletagmanager\.com\/gtag\/js\?id=G-/i },
+          weight: 0.95,
+          patterns: [ // GA4 patterns
+            { type: "script", pattern: /www\.googletagmanager\.com\/gtag\/js\?id=G-/i, weight: 0.95 }, // GA4 script
             { type: "jsGlobal", pattern: "gtag" },
             { type: "networkRequest", pattern: /\/g\/collect\?v=2/i }
           ]
@@ -76,37 +75,24 @@ const signatures = {
     }
   ],
 
-  // JavaScript Frameworks
-  javascript_frameworks: [
-    {
-      name: "React",
-      weight: 0.95,
-      patterns: [
-        { type: "jsGlobal", pattern: "React" },
-        { type: "jsGlobal", pattern: "ReactDOM" },
-        { type: "script", pattern: /react(\.development|\.production|\.min)?\.js/i },
-        { type: "html", pattern: /data-reactroot/i },
-        { type: "html", pattern: /data-reactid/i },
-        // Obfuscated/minified patterns
-        { type: "html", pattern: /_reactListening/i },
-        { type: "html", pattern: /__REACT_DEVTOOLS_GLOBAL_HOOK__/i },
-        { type: "html", pattern: /\[\s*"r"\s*,\s*"e"\s*,\s*"a"\s*,\s*"c"\s*,\s*"t"\s*\]/i, weight: 0.7 }
-      ]
-    },
-    {
+
+
+
+  // Utility Libraries
+  /**
       name: "Emotion",
       weight: 0.9,
       patterns: [
         { type: "script", pattern: /emotion/i },
-        { type: "html", pattern: /css-[a-zA-Z0-9]+/i },
-        { type: "html", pattern: /data-emotion/i },
+ { type: "html", pattern: /css-[a-zA-Z0-9]+/i },
+ { type: "html", pattern: /data-emotion/i },
         { type: "jsGlobal", pattern: "emotion" },
         { type: "jsGlobal", pattern: "styled" }
       ]
-    },
     {
-      name: "Angular",
-      versions: {
+      name: "Angular", category: "frontend_frameworks",
+       versionProperty: "angular.version",
+       versions: {
         "AngularJS": {
           weight: 0.9,
           patterns: [
@@ -115,7 +101,9 @@ const signatures = {
             { type: "html", pattern: /ng-app/i },
             { type: "html", pattern: /ng-controller/i },
             // Obfuscated patterns
-            { type: "html", pattern: /\{\{\s*.*?\s*\}\}/i, weight: 0.6 }
+            { type: "html", pattern: /\{\{\s*.*?\s*\}\}/i, weight: 0.6 },
+            // Detects AngularJS versions using the angular.version property
+            { type: "jsVersion", pattern: /^1\./, weight: 0.9 },
           ]
         },
         "Angular 2+": {
@@ -125,14 +113,38 @@ const signatures = {
             { type: "html", pattern: /_nghost-/i },
             { type: "html", pattern: /_ngcontent-/i },
             // Obfuscated patterns
-            { type: "networkRequest", pattern: /\.ngfactory\.js/i }
+            { type: "networkRequest", pattern: /\.ngfactory\.js/i },
+            // Detects Angular 2+ versions using the angular.version property
+            { type: "jsVersion", pattern: /^[2-9]|\d{2,}\./, weight: 0.9 },
           ]
         }
       }
     },
     {
+      name: "Svelte",
+ category: "frontend_frameworks",
+      patterns: [
+        { type: "script", pattern: /svelte(\.min)?\.js/i },
+        { type: "html", pattern: /svelte-[\w]+/i }
+      ]
+    },
+    {
+ name: "Ember.js",
+ category: "frontend_frameworks",
+ weight: 0.8,
+ patterns: [
+ { type: "jsGlobal", pattern: "Ember", weight: 0.9 },
+ { type: "jsGlobal", pattern: "EmberENV", weight: 0.9 },
+ { type: "script", pattern: /ember(\.min)?\.js/i, weight: 0.8 },
+ { type: "html", pattern: /ember-application/i, weight: 0.7 },
+ { type: "html", pattern: /ember-view/i, weight: 0.7 },
+ { type: "cookie", pattern: /ember_simple_auth-session/, weight: 0.6 }
+ ]
+    },
+    {
       name: "Vue.js",
-      versions: {
+       versionProperty: "Vue.version",
+       versions: {
         "Vue 2": {
           weight: 0.9,
           patterns: [
@@ -140,7 +152,9 @@ const signatures = {
             { type: "script", pattern: /vue(\.min)?\.js/i },
             { type: "html", pattern: /data-v-/i },
             // Obfuscated patterns
-            { type: "html", pattern: /__vue__/i }
+            { type: "html", pattern: /__vue__/i },
+            // Detects Vue 2 versions using the Vue.version property
+            { type: "jsVersion", pattern: /^2\./, weight: 0.9 },
           ]
         },
         "Vue 3": {
@@ -148,48 +162,80 @@ const signatures = {
           patterns: [
             { type: "jsGlobal", pattern: "Vue" },
             { type: "script", pattern: /vue@3/i },
-            { type: "html", pattern: /data-v-/i }
+            { type: "html", pattern: /data-v-/i },
+            // Detects Vue 3 versions using the Vue.version property
+            { type: "jsVersion", pattern: /^3\./, weight: 0.9 },
           ]
         }
+
       }
     }
   ],
-
-  // JavaScript Libraries
-  javascript_libraries: [
+ utility_libraries: [
     {
       name: "jQuery",
-      weight: 0.9,
-      patterns: [
-        { type: "jsGlobal", pattern: "jQuery" },
-        { type: "jsGlobal", pattern: "$" },
-        { type: "script", pattern: /jquery(\.min)?\.js/i },
-        // Obfuscated patterns
-        { type: "html", pattern: /function\s*\(\s*[a-z]\s*,\s*[a-z]\s*\)\s*\{\s*return\s*new\s*[a-z]\.\s*fn\.init/i, weight: 0.7 }
-      ]
-    },
+      versions: {
+        versionProperty: "$.fn.jquery",
+        "jQuery 1.x": {
+          weight: 0.9,
+          patterns: [
+            // Detects jQuery 1.x versions using the $().jquery property
+            { type: "jsVersion", pattern: /^1\./, versionProperty: "$.fn.jquery", weight: 0.9 },
+            { type: "script", pattern: /code\.jquery\.com\/jquery-1\./i, weight: 0.8 }, // Fallback to script tag
+          ]
+        },
+        "jQuery 2.x": {
+          weight: 0.9,
+          patterns: [
+            // Detects jQuery 2.x versions using the $().jquery property
+            { type: "jsVersion", pattern: /^2\./, versionProperty: "$.fn.jquery", weight: 0.9 },
+            { type: "script", pattern: /code\.jquery\.com\/jquery-2\./i, weight: 0.8 }, // Fallback to script tag
+          ]
+        },
+        "jQuery 3.x": {
+          weight: 0.9,
+          patterns: [
+            // Detects jQuery 3.x versions using the $().jquery property
+            { type: "jsVersion", pattern: /^3\./, versionProperty: "$.fn.jquery", weight: 0.9 },
+            { type: "script", pattern: /code\.jquery\.com\/jquery-3\./i, weight: 0.8 }, // Fallback to script tag
+          ]
+        },
+        "jQuery Unspecified Version": { // For cases where version property isn't detected
+          weight: 0.8,
+          patterns: [
+          ]
+        },
+        patterns: [
+          { type: "jsGlobal", pattern: "jQuery", weight: 0.9 },
+          { type: "jsGlobal", pattern: "$", weight: 0.9 },
+          { type: "script", pattern: /jquery(\.min)?\.js/i, weight: 0.8 },
+          { type: "html", pattern: /<script[^>]+jquery/i },
+          { type: "html", pattern: /<script[^>]+jquery-migrate/i },
+ ] },
+      versionProperty: "$.fn.jquery",
+ },
     {
-      name: "Lodash",
+ name: "Lodash",
       weight: 0.9,
       patterns: [
         { type: "jsGlobal", pattern: "_" },
-        { type: "script", pattern: /lodash(\.min)?\.js/i }
-      ]
+ { type: "script", pattern: /lodash(\.min)?\.js/i }
     }
   ],
 
-  // Payment Processors
+ // Payment Processors
   payment_processors: [
     {
-      name: "Stripe",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /js\.stripe\.com/i },
-        { type: "cookie", pattern: /__stripe_mid/ },
-        { type: "jsGlobal", pattern: "Stripe" },
-        // Obfuscated patterns
-        { type: "networkRequest", pattern: /api\.stripe\.com/i },
-        { type: "html", pattern: /data-stripe/i }
+        name: "Stripe",
+        weight: 0.95,
+        patterns: [
+        { type: "script", pattern: /js\.stripe\.com/i, weight: 0.9 },
+        { type: "cookie", pattern: /__stripe_mid/, weight: 0.7 },
+        { type: "cookie", pattern: /__stripe_sid/, weight: 0.7 },
+        { type: "jsGlobal", pattern: "Stripe", weight: 0.9 },
+            // Obfuscated patterns
+        { type: "networkRequest", pattern: /api\.stripe\.com/i, weight: 0.8 },
+        { type: "html", pattern: /data-stripe/i, weight: 0.7 }
       ]
     },
     {
@@ -197,10 +243,13 @@ const signatures = {
       weight: 0.9,
       patterns: [
         { type: "script", pattern: /paypal\.com\/sdk/i },
-        { type: "jsGlobal", pattern: "paypal" },
+        { type: "script", pattern: /paypalobjects\.com/i },
+        { type: "jsGlobal", pattern: "paypal", weight: 0.9 },
         // Obfuscated patterns
-        { type: "networkRequest", pattern: /\.paypal\.com/i },
-        { type: "html", pattern: /data-paypal/i }
+        { type: "networkRequest", pattern: /\.paypal\.com/i, weight: 0.8 },
+        { type: "html", pattern: /data-paypal/i, weight: 0.6 },
+        { type: "cookie", pattern: /paypal/i, weight: 0.6 },
+        { type: "html", pattern: /paypalcheckout/i, weight: 0.6 }
       ]
     },
     {
@@ -236,7 +285,7 @@ const signatures = {
   ],
   
   // Miscellaneous
-  miscellaneous: [
+ miscellaneous: [
     {
       name: "Open Graph",
       weight: 0.9,
@@ -251,7 +300,7 @@ const signatures = {
   ],
   
   // Cookie Compliance
-  cookie_compliance: [
+ cookie_compliance: [
     {
       name: "OneTrust",
       weight: 0.9,
@@ -267,82 +316,134 @@ const signatures = {
     }
   ],
 
-  // CMS
-  cms: [
+  self_hosted_cms: [
     {
-      name: "WordPress",
+        name: "WordPress",
+        versions: {"Wordpress < 4.0": {patterns: [{ type: "meta", pattern: { name: "generator", content: /WordPress ([0-3]\.\d+(\.\d+)?)/i }, weight: 0.9 }, ] }, "Wordpress >= 4.0": { weight: 0.9, patterns: [ { type: "meta", pattern: { name: "generator", content: /WordPress ([4-9]\.\d+(\.\d+)?)/i }, weight: 0.9 }, ] }, "Wordpress >= 6.0": { weight: 0.9, patterns: [ { type: "meta", pattern: { name: "generator", content: /WordPress ([6-9]\.\d+(\.\d+)?)/i }, weight: 0.9 }, ] }, patterns: [
+            { type: "script", pattern: /wp-content/, weight: 0.8 }, // Common script location
+            { type: "script", pattern: /wp-includes/, weight: 0.8 }, // Common script location
+            { type: "cookie", pattern: /wordpress_/, weight: 0.7 }, // Common WordPress cookie prefix
+            { type: "cookie", pattern: /wp-settings-\d/, weight: 0.7 }, // Common WordPress cookie prefix
+            { type: "cookie", pattern: /wp-settings-/, weight: 0.7 }, // Common WordPress cookie prefix
+            { type: "networkRequest", pattern: /wp-json/i }, // Obfuscated patterns
+            { type: "jsGlobal", pattern: "wp" }
+          ]
+        }
+ },
+    {
+        name: "Squarespace",
+        category: "hosted_cms",
+        weight: 0.9,
+        patterns: [
+            { type: "script", pattern: /squarespace-assets\.com/i, weight: 0.8 },
+            { type: "html", pattern: /squarespace-cdn/i, weight: 0.8 },
+            { type: "html", pattern: /class="sqs-/i, weight: 0.7 },
+            { type: "networkRequest", pattern: /squarespace\.com/i, weight: 0.7 },
+            { type: "meta", pattern: { name: "generator", content: /Squarespace/i }, weight: 0.9 }
+        ]
+
+    },
+ {
+
+      name: "Wix",
       weight: 0.9,
       patterns: [
-        { type: "script", pattern: /wp-content/i },
-        { type: "script", pattern: /wp-includes/i },
-        { type: "html", pattern: /wp-content/i },
-        { type: "meta", pattern: { name: "generator", content: /WordPress/i } },
-        { type: "cookie", pattern: /wordpress_/ },
-        // Obfuscated patterns
-        { type: "networkRequest", pattern: /wp-json/i },
-        { type: "jsGlobal", pattern: "wp" }
+        { type: "html", pattern: /wix\.com/i, weight: 0.9 },
+        { type: "html", pattern: /static\.parastorage\.com/i, weight: 0.8 },
+        { type: "script", pattern: /wixstatic\.com/i, weight: 0.8 },
+        { type: "script", pattern: /wix\.com/i, weight: 0.8 },
+        { type: "networkRequest", pattern: /wix\.com/i, weight: 0.7 },
+        { type: "cookie", pattern: /WIX_LOCALE/i },
+        { type: "cookie", pattern: /SESS/ }
       ]
     },
-    {
+ {
+
       name: "Drupal",
       weight: 0.9,
       patterns: [
         { type: "script", pattern: /drupal\.js/i },
         { type: "html", pattern: /drupal-/i },
+        { type: "html", pattern: /data-drupal/i },
+        { type: "jsGlobal", pattern: /Drupal/i },
         { type: "meta", pattern: { name: "generator", content: /Drupal/i } },
         // Obfuscated patterns
-        { type: "jsGlobal", pattern: "Drupal" },
         { type: "cookie", pattern: /SESS/ }
       ]
-    }
-  ],
-
-  // Frameworks
-  web_frameworks: [
-    {
-      name: "Next.js",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /_next\//i },
-        { type: "html", pattern: /data-next-page/i },
-        { type: "html", pattern: /__NEXT_DATA__/i },
-        // Obfuscated patterns
-        { type: "jsGlobal", pattern: "__NEXT_DATA__" },
-        { type: "networkRequest", pattern: /_next\/static/i }
-      ]
     },
     {
-      name: "Nuxt.js",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /_nuxt\//i },
-        { type: "html", pattern: /data-n-head/i },
-        { type: "html", pattern: /__NUXT__/i },
-        // Obfuscated patterns
-        { type: "jsGlobal", pattern: "__NUXT__" },
-        { type: "networkRequest", pattern: /_nuxt\/static/i }
-      ]
-    }
-  ],
 
-  // UI Frameworks
-  ui_frameworks: [
-    {
-      name: "Bootstrap",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /bootstrap(\.min)?\.js/i },
-        { type: "css", pattern: /bootstrap(\.min)?\.css/i },
-        { type: "html", pattern: /class="[^"]*navbar/i },
-        { type: "html", pattern: /class="[^"]*container/i },
-        { type: "html", pattern: /class="[^"]*row/i },
-        { type: "html", pattern: /class="[^"]*col-/i },
-        // Obfuscated patterns
-        { type: "jsGlobal", pattern: "bootstrap" }
-      ]
+        name: "Joomla",
+        category: "self_hosted_cms",
+        weight: 0.8,
+        patterns: [
+            { type: "html", pattern: /joomla/i, weight: 0.8 },
+            { type: "meta", pattern: { name: "generator", content: /Joomla!/i }, weight: 0.9 },
+            { type: "script", pattern: /joomla-core/i, weight: 0.7 },
+            { type: "networkRequest", pattern: /joomla/i, weight: 0.7 }
+        ]
+    }
+ ],
+ hosted_cms: [
+ {
+ name: "Ghost",
+ weight: 0.9,
+ patterns: [
+ { type: "header", pattern: "x-ghost-cache-status" },
+ { type: "meta", pattern: { name: "generator", content: /Ghost/i }, weight: 0.9 },
+ { type: "html", pattern: /ghost/i },
+ { type: "script", pattern: /ghost/i }
+ ]
+ },
+  ],
+  css_frameworks: [ {name: "Bootstrap",
+        category: "css_frameworks",
+       versions: {
+            "Bootstrap 3.x": {
+                weight: 0.9,
+                patterns: [
+                    // Detects Bootstrap 3.x versions using the script tag
+                    { type: "script", pattern: /bootstrapcdn\.com\/bootstrap\/3\./i, weight: 0.9 },
+                    // Detects Bootstrap 3.x versions using the css tag
+                    { type: "css", pattern: /bootstrapcdn\.com\/bootstrap\/3\./i, weight: 0.9 }
+                ]
+            },
+            "Bootstrap 4.x": {
+                weight: 0.9,
+                patterns: [
+                    // Detects Bootstrap 4.x versions using the script tag
+                    { type: "script", pattern: /bootstrapcdn\.com\/bootstrap\/4\./i, weight: 0.9 },
+                    // Detects Bootstrap 4.x versions using the css tag with version in URL
+                    { type: "css", pattern: /bootstrap\/4\./i, weight: 0.9 },
+
+                    { type: "css", pattern: /bootstrapcdn\.com\/bootstrap\/4\./i, weight: 0.9 }
+                ]
+            },
+            "Bootstrap 5.x": {
+                weight: 0.9,
+                patterns: [
+                    // Detects Bootstrap 5.x versions using the script tag
+                    { type: "script", pattern: /bootstrapcdn\.com\/bootstrap\/5\./i, weight: 0.9 },
+                    // Detects Bootstrap 5.x versions using the css tag with version in URL
+                    { type: "css", pattern: /bootstrap\/5\./i, weight: 0.9 },
+
+                    { type: "css", pattern: /bootstrapcdn\.com\/bootstrap\/5\./i, weight: 0.9 }
+ ]
+            },
+            patterns: [
+ { type: "script", pattern: /bootstrap(\.min)?\.js/i, weight: 0.8 }, // Common Bootstrap script
+                { type: "css", pattern: /bootstrap(\.min)?\.css/i, weight: 0.8 }, // Common Bootstrap CSS
+                { type: "html", pattern: /class="[^"]*navbar/i, weight: 0.7 }, // Common navbar class
+                { type: "html", pattern: /class="[^"]*container/i, weight: 0.7 }, // Common container class
+                { type: "html", pattern: /class="[^"]*row/i },
+                { type: "html", pattern: /class="[^"]*col-/i },
+                { type: "html", pattern: /class="[^"]*btn/i },
+            ]
+ } },
     },
     {
-      name: "Tailwind CSS",
+      name: "Tailwind CSS", category: "css_frameworks",
+      category: "css_frameworks",
       weight: 0.9,
       patterns: [
         { type: "css", pattern: /tailwind(\.min)?\.css/i },
@@ -353,91 +454,97 @@ const signatures = {
       ]
     }
   ],
-
   // Server
-  server: [
     {
-      name: "Apache",
-      weight: 0.9,
-      patterns: [
-        { type: "header", pattern: "server", value: /apache/i },
-        { type: "header", pattern: "x-powered-by", value: /apache/i }
-      ]
-    },
+        name: "Apache",
+        weight: 0.9,
+        patterns: [
+        { type: "header", pattern: "server", value: /apache/i, weight: 0.9 }, // Check if "apache" is in the Server header
+        { type: "header", pattern: "x-powered-by", value: /apache/i, weight: 0.7 }, // Check if "apache" is in the X-Powered-By header
+        { type: "html", pattern: /Apache Web Server/, weight: 0.6 }, // Check for "Apache Web Server" in HTML comments
+        { type: "error", pattern: /Apache/, weight: 0.7 }, // Check for "Apache" in error messages
+        ]
+    },  
     {
-      name: "nginx",
+      name: "Nginx",
       weight: 0.9,
-      patterns: [
+        // Check for the "Server" header with "nginx" as the value
         { type: "header", pattern: "server", value: /nginx/i }
+        // Add more Nginx specific patterns as needed
+        // { type: "header", pattern: "x-nginx-cache-status" },
+        // { type: "html", pattern: /<title>Welcome to nginx!<\/title>/i }, // Default Nginx welcome page title
       ]
     },
     {
-      name: "Express",
+
+ name: "Express.js", category: "server_platforms",
       weight: 0.8,
       patterns: [
         { type: "header", pattern: "x-powered-by", value: /express/i }
       ]
     }
-  ],
-
-  // Reverse Proxies
-  reverse_proxies: [
+ ],
+  
+  hosting_providers: [
     {
-      name: "Cloudflare",
-      weight: 0.9,
+      name: "Cloudways",
+      weight: 0.8,
       patterns: [
-        { type: "header", pattern: "cf-ray" },
-        { type: "header", pattern: "server", value: /cloudflare/i },
-        { type: "cookie", pattern: /__cfduid/ }
+        { type: "header", pattern: "server", value: /cloudways/i },
+        { type: "networkRequest", pattern: /cloudwaysapps\.com/i },
+        { type: "error", pattern: /cloudways/i }
       ]
     },
     {
-      name: "Envoy",
+      name: "Digital Ocean",
+        weight: 0.7,
+        patterns: [
+            { type: "header", pattern: "server", value: /digitalocean/i },
+            { type: "networkRequest", pattern: /digitalocean/i }
+        ]
+    }
+ ], reverse_proxies: [ // Reverse Proxies
+        name: "AWS",
+        weight: 0.8,
+        patterns: [
+            { type: "header", pattern: "x-amz-id-2" },
+            { type: "header", pattern: "x-amz-cf-id" },
+            { type: "networkRequest", pattern: /amazonaws\.com/i }
+        ]
+    },
+    {
+        name: "Google Cloud",
+        weight: 0.8,
+        patterns: [
+            { type: "header", pattern: "server", value: /Google Frontend/i, weight: 0.9 },
+            { type: "networkRequest", pattern: /googleapis\.com/i }
+        ]
+
+    }, 
+    {
+        name: "Cloudflare",
+        weight: 0.95, // High confidence for Cloudflare
+        patterns: [
+        { type: "header", pattern: "cf-ray", weight: 0.9 }, // Cloudflare's unique header
+        { type: "header", pattern: "cf-cache-status", weight: 0.8 }, // Cloudflare's unique header
+        { type: "header", pattern: "server", value: /cloudflare/i, weight: 0.8 }, // Cloudflare often sets the server header
+        { type: "cookie", pattern: /__cfduid/, weight: 0.7 }, // Common Cloudflare cookie
+        { type: "cookie", pattern: /__cf_bm/, weight: 0.7 }, // Common Cloudflare cookie
+        { type: "networkRequest", pattern: /cloudflare\.com/i, weight: 0.7 },
+        ]
+    },
+    {
+      name: "Envoy", category: "reverse_proxies",
       weight: 0.9,
       patterns: [
         { type: "header", pattern: "server", value: /envoy/i },
         { type: "header", pattern: "x-envoy-upstream-service-time" }
       ]
-    }
-  ],
-
-  // E-commerce
-  ecommerce: [
-    {
-      name: "Shopify",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /cdn\.shopify\.com/i },
-        { type: "html", pattern: /shopify/i },
-        { type: "meta", pattern: { name: "generator", content: /Shopify/i } },
-        { type: "jsGlobal", pattern: "Shopify" }
-      ]
     },
-    {
-      name: "WooCommerce",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /woocommerce/i },
-        { type: "html", pattern: /woocommerce/i },
-        { type: "css", pattern: /woocommerce/i },
-        { type: "jsGlobal", pattern: "woocommerce" }
-      ]
-    },
-    {
-      name: "Magento",
-      weight: 0.9,
-      patterns: [
-        { type: "script", pattern: /magento/i },
-        { type: "html", pattern: /magento/i },
-        { type: "cookie", pattern: /mage-/i },
-        { type: "jsGlobal", pattern: "Mage" }
-      ]
-    }
-  ],
-
-  // Programming Languages
+  ], 
   programming_languages: [
     {
+      // Check for X-Powered-By header or PHPSESSID cookie
       name: "PHP",
       weight: 0.8,
       patterns: [
@@ -446,6 +553,7 @@ const signatures = {
       ]
     },
     {
+      // Check for Phusion Passenger server header or Ruby session cookie
       name: "Ruby",
       weight: 0.8,
       patterns: [
@@ -454,6 +562,7 @@ const signatures = {
       ]
     },
     {
+      // Check for Python server header or Django/Flask cookies
       name: "Python",
       weight: 0.8,
       patterns: [
@@ -462,11 +571,9 @@ const signatures = {
         { type: "cookie", pattern: /flask/i }
       ]
     }
-  ],
-
+    // Add more programming language signatures here]
   // Databases
   databases: [
-    {
       name: "MySQL",
       weight: 0.7,
       patterns: [
@@ -489,28 +596,134 @@ const signatures = {
         { type: "html", pattern: /mongodb/i },
         { type: "jsGlobal", pattern: "MongoDB" }
       ]
+    },
+   {
+      name: "Redis",
+      weight: 0.7,
+      patterns: [
+        { type: "html", pattern: /redis/i },
+        { type: "header", pattern: "x-redis-info" },
+        { type: "networkRequest", pattern: /redis/i }, // Example pattern for Redis Cloud or similar
+        { type: "error", pattern: /Redis/i },
+        { type: "jsGlobal", pattern: "Redis" } // Example for Redis client libraries
+      ]      
     }
-  ]
+ ],
+  marketing_automation: [
+        {
+            name: "Mailchimp",
+            weight: 0.8,
+            patterns: [
+                { type: "script", pattern: /cdn-images\.mailchimp\.com/i },
+                { type: "html", pattern: /mailchimp/i },
+                { type: "networkRequest", pattern: /mailchimp/i },
+                { type: "jsGlobal", pattern: /mailchimp/i }
+            ]
+        },
+    {
+        name: "Adyen",
+        weight: 0.8,
+        patterns: [
+            { type: "script", pattern: /checkout\.adyen\.com/i },
+            { type: "html", pattern: /adyen\.com/i },
+            { type: "jsGlobal", pattern: /Adyen/i },
+            { type: "networkRequest", pattern: /adyen\.com/i }
+        ]
+    },
+    {
+      name: "ActiveCampaign",
+      weight: 0.8,
+      patterns: [
+        { type: "script", pattern: /activehosted\.com/i },
+        { type: "networkRequest", pattern: /activehosted\.com/i }
+      ]
+ ],
 };
 
 /**
+/**
+ * Extracts version numbers from potential global JavaScript variables.
+ * @param {string} html - The HTML content of the website.
+ * @param {string[]} jsGlobals - Array of potential global JavaScript variable names.
+ * @returns {object} - Object containing detected JavaScript versions by variable name (e.g., { 'React.version': '18.0.0', '$.fn.jquery': '3.6.0' }).
+ */
+const extractJsVersions = (html, jsGlobals) => {
+  const jsVersions = {};
+
+  // Check for angular.version
+  const angularVersionMatch = html.match(/angular\.version\s*=\s*\{\s*full:\s*['"]([^'"]+)['"]/i);
+  if (angularVersionMatch && angularVersionMatch[1]) {
+      jsVersions["angular.version"] = angularVersionMatch[1];
+  } else {
+      jsVersions["angular.version"] = null;
+  }
+
+  // Check for Vue.version
+  const vueVersionMatch = html.match(/Vue\.version\s*=\s*['"]([^'"]+)['"]/i);
+  if (vueVersionMatch && vueVersionMatch[1]) {
+      jsVersions["Vue.version"] = vueVersionMatch[1];
+  } else {
+      jsVersions["Vue.version"] = null;
+  }
+
+  // Check for React.version
+  const reactVersionMatch = html.match(/React\.version\s*=\s*['"]([^'"]+)['"]/i);
+  if (reactVersionMatch && reactVersionMatch[1]) {
+    jsVersions["React.version"] = reactVersionMatch[1];
+  } else {
+      jsVersions["React.version"] = null; // Indicate that React might be present but version wasn't found this way
+  }
+
+  // Check for $.fn.jquery (jQuery version)
+  const jqueryVersionMatch = html.match(/\$\.fn\.jquery\s*=\s*['"]([^'"]+)['"]/i);
+  if (jqueryVersionMatch && jqueryVersionMatch[1]) {
+ jsVersions["$.fn.jquery"] = jqueryVersionMatch[1];
+  }else {
+      jsVersions["$.fn.jquery"] = null; // Indicate that jQuery was found but version wasn't
+ }
+ return jsVersions;
+}
+
+/**
+ * Adds a new signature to the signatures database.
+ */
+function addSignature(signature) {
+  signatures[signature.category].push(signature);
+}
+
+/**
+ * Deletes a signature from the signatures database by name.
+ * @param {string} name - The name of the signature to delete.
+ */
+function deleteSignatureByName(name) {
+    for (const category in signatures) {
+        signatures[category] = signatures[category].filter(signature => signature.name !== name);
+    }
+}
+
+
+
+/**
+ * @param {string} url - The URL of the website to detect technologies from.
  * Detect technologies used on a website
  * @param {string} html - The HTML content of the website
  * @param {object} httpHeaders - The HTTP headers from the response
  * @returns {object} - Object containing detected technologies by category
  */
-function detectTechnologies(html, httpHeaders = {}) {
-  const detected = {};
+const detectTechnologies = (html, httpHeaders = {}) => {
+  const detected = {}; // Changed from const to let to allow re-assignment
   
-  // Combine HTTP headers with meta http-equiv headers
   const metaHeaders = extractHeaders(html);
+  // Note: This merge might overwrite actual headers if meta http-equiv is used for the same header name.
+  // This is a limitation for now, but a proper solution would involve passing actual HTTP headers
+  // from the request handling part.
   const headers = { ...metaHeaders, ...httpHeaders };
   
   // Extract meta tags
   const metaTags = extractMetaTags(html);
   
   // Extract cookies (can't be done server-side, but we'll check for patterns)
-  const cookies = {};
+  const cookies = extractCookies(html);
   
   // Extract script sources
   const scripts = extractScripts(html);
@@ -523,7 +736,16 @@ function detectTechnologies(html, httpHeaders = {}) {
   
   // Extract network requests from script tags (limited capability)
   const potentialNetworkRequests = extractPotentialNetworkRequests(html);
+  
+  // Extract HTML comments
+  const htmlComments = extractHtmlComments(html);
 
+  // Extract JavaScript versions
+  const jsVersions = extractJsVersions(html, potentialJsGlobals); // Pass potentialJsGlobals
+
+  // Function to process signatures within a given category or subcategory
+ continue;
+    }
   // Iterate over each category in the signatures
   for (const category in signatures) {
     detected[category] = []; // Initialize the category array
@@ -533,9 +755,10 @@ function detectTechnologies(html, httpHeaders = {}) {
     for (const signature of categorySignatures) {
       let detectedVersion = null;
       let maxConfidence = 0;
-      let isDetected = false;
-
+      let isDetected = false; // Flag to indicate if any version or the base signature is detected
+      
       // Handle technologies with versions
+      // Added logic to check for signatures within the base patterns array
       if (signature.versions) {
         for (const version in signature.versions) {
           const versionData = signature.versions[version];
@@ -545,7 +768,7 @@ function detectTechnologies(html, httpHeaders = {}) {
           let totalPatterns = versionPatterns.length;
 
           for (const pattern of versionPatterns) {
-            let match = checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, potentialJsGlobals, potentialNetworkRequests);
+            let match = checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, potentialJsGlobals, potentialNetworkRequests, htmlComments, jsVersions);
             
             if (match) {
               versionMatches++;
@@ -560,16 +783,15 @@ function detectTechnologies(html, httpHeaders = {}) {
             isDetected = true;
           }
         }
-        
         // If we detected a version, add it to the results
         if (isDetected) {
           detected[category].push({ 
-            name: signature.name, 
+            name: signature.name,
             version: detectedVersion, 
             confidence: Math.round(maxConfidence * 100) 
-          });
+          });          
         }
-      } 
+      }
       // Handle technologies without versions
       else {
         let confidence = signature.weight || 0.5;
@@ -577,7 +799,7 @@ function detectTechnologies(html, httpHeaders = {}) {
         let totalPatterns = signature.patterns.length;
         
         for (const pattern of signature.patterns) {
-          let match = checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, potentialJsGlobals, potentialNetworkRequests);
+          let match = checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, potentialJsGlobals, potentialNetworkRequests, htmlComments, jsVersions); // Pass jsVersions
           
           if (match) {
             matches++;
@@ -590,7 +812,7 @@ function detectTechnologies(html, httpHeaders = {}) {
         // If we have matches, add to results
         if (matches > 0) {
           detected[category].push({ 
-            name: signature.name, 
+            name: signature.name,
             version: null, 
             confidence: Math.round(confidence * 100) 
           });
@@ -602,11 +824,25 @@ function detectTechnologies(html, httpHeaders = {}) {
   return detected;
 }
 
+// Helper function to check for version patterns in JS globals
+const checkVersionPattern = (patternRegex, jsVersions, versionProperty) => { // Renamed pattern to patternRegex
+  // The pattern here is the expected version regex from the signature
+  if (jsVersions && versionProperty && jsVersions[versionProperty] !== undefined && jsVersions[versionProperty] !== null) {
+    // You can add more sophisticated version comparison logic here if needed
+    // For now, we'll just return the detected version string
+    return jsVersions[versionProperty];
+  }
+  // If versionProperty is not found in jsVersions or is null/undefined
+ return null;
+}
+
 // Helper function to check a pattern against various content types
-function checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cookies, jsGlobals, networkRequests) {
+const checkPattern = (pattern, html, scripts, cssLinks, headers, metaTags, cookies, jsGlobals, networkRequests, htmlComments, jsVersions) => {
   switch (pattern.type) {
     case "html":
       return pattern.pattern.test(html);
+
+
       
     case "script":
       return scripts.some(script => pattern.pattern.test(script));
@@ -627,26 +863,44 @@ function checkPattern(pattern, html, scripts, cssLinks, headers, metaTags, cooki
       return pattern.name in metaTags;
       
     case "cookie":
-      // Simple check for cookie patterns in HTML (not reliable but better than nothing)
-      return pattern.pattern.test(html);
+      return cookies.some(cookie => pattern.pattern.test(cookie.name));
       
     case "jsGlobal":
       // Check if the global variable name appears in the HTML
-      return jsGlobals.includes(pattern.pattern) || 
-             new RegExp(`\\b${pattern.pattern}\\b`).test(html);
-      
+ return jsGlobals.includes(pattern.pattern) ||
+ new RegExp(`\\b${pattern.pattern}\\b`).test(html);
+
     case "networkRequest":
-      // Check for network request patterns in HTML
-      return pattern.pattern.test(html) || 
-             networkRequests.some(req => pattern.pattern.test(req));
-      
-    default:
+      return pattern.pattern.test(html) || networkRequests.some(req => pattern.pattern.test(req));
+
+    case "jsVersion":
+      const detectedVersion = checkVersionPattern(pattern.pattern, jsVersions, pattern.versionProperty); // Pass pattern.pattern as the regex
+      if (detectedVersion === null || (pattern.pattern instanceof RegExp && !pattern.pattern.test(detectedVersion)) || (typeof pattern.pattern === 'string' && detectedVersion !== pattern.pattern) ) { // Test the detected version against the pattern regex or string
+        return false;
+      }
+ return pattern.pattern.test(detectedVersion);
+    case "htmlComment":
+      return htmlComments.some(comment => pattern.pattern.test(comment) && (!pattern.value || comment.includes(pattern.value)));
+    
+    case "css":
       return false;
   }
 }
 
+// Extract cookies from script tags or inline scripts
+const extractCookies = (html) => {
+ const cookies = [];
+ const cookieRegex = /document\.cookie\s*=\s*['"]([^'"]+?)=([^;'"]*)/gi; // Extract name=value pairs
+ let match;
+ while (match = cookieRegex.exec(html)) {
+ const name = match[1];
+ const value = match[2];
+ cookies.push({ name: name, value: value });
+  }
+  return cookies;
+}
 // Extract script sources from HTML
-function extractScripts(html) {
+const extractScripts = (html) => {
   const scripts = [];
   const scriptRegex = /<script[^>]*src=["']([^"']+)["'][^>]*>/gi;
   let match;
@@ -659,7 +913,7 @@ function extractScripts(html) {
 }
 
 // Extract CSS link sources from HTML
-function extractCssLinks(html) {
+const extractCssLinks = (html) => {
   const cssLinks = [];
   const cssRegex = /<link[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
   const altCssRegex = /<link[^>]*href=["']([^"']+\.css[^"']*)["'][^>]*>/gi;
@@ -677,7 +931,7 @@ function extractCssLinks(html) {
 }
 
 // Extract meta tags from HTML
-function extractMetaTags(html) {
+const extractMetaTags = (html) => {
   const metaTags = {};
   const metaRegex = /<meta[^>]*name=["']([^"']+)["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
   const altMetaRegex = /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']([^"']+)["'][^>]*>/gi;
@@ -695,7 +949,7 @@ function extractMetaTags(html) {
 }
 
 // Extract headers from meta http-equiv tags
-function extractHeaders(html) {
+const extractHeaders = (html) => {
   const headers = {};
   const headerRegex = /<meta[^>]*http-equiv=["']([^"']+)["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
   const altHeaderRegex = /<meta[^>]*content=["']([^"']+)["'][^>]*http-equiv=["']([^"']+)["'][^>]*>/gi;
@@ -712,8 +966,19 @@ function extractHeaders(html) {
   return headers;
 }
 
+// Extract HTML comments
+const extractHtmlComments = (html) => {
+    const comments = [];
+    const commentRegex = /<!--([\s\S]*?)-->/gi;
+    let match;
+
+    while ((match = commentRegex.exec(html)) !== null) {
+        comments.push(match[1]);
+    }
+    return comments;
+}
 // Extract potential JS globals from inline scripts
-function extractPotentialJsGlobals(html) {
+const extractPotentialJsGlobals = (html) => {
   const globals = [];
   const globalRegex = /(?:var|let|const|window\.)\s+(\w+)\s*=/gi;
   const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
@@ -734,12 +999,11 @@ function extractPotentialJsGlobals(html) {
       globals.push(global);
     }
   });
-  
   return globals;
 }
 
-// Extract potential network requests from script tags
-function extractPotentialNetworkRequests(html) {
+// Extract potential network requests from script tags or HTML
+const extractPotentialNetworkRequests = (html) => {
   const requests = [];
   const urlRegex = /['"]https?:\/\/([^'"]+)['"]/gi;
   let match;
@@ -751,4 +1015,31 @@ function extractPotentialNetworkRequests(html) {
   return requests;
 }
 
-module.exports = { signatures, detectTechnologies };
+// Adding the new Google Analytics signature using the addSignature function
+addSignature({
+    name: "Google Analytics",
+    category: "analytics",
+    weight: 0.8,
+    patterns: [
+        { type: "cookie", pattern: /^_ga/i, weight: 0.8 }
+    ]
+});
+
+module.exports = {
+ extractJsVersions,
+ signatures,
+ detectTechnologies,
+ addSignature,
+ deleteSignatureByName,
+ extractCookies,
+ checkVersionPattern,
+ checkPattern,
+ extractScripts,
+ extractCssLinks,
+ extractMetaTags,
+ extractHeaders,
+ extractHtmlComments };
+ extractPotentialJsGlobals,
+ extractPotentialNetworkRequests,
+ addSignature,
+ deleteSignatureByName
